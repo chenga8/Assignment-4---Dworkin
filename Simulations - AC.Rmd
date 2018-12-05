@@ -1,0 +1,239 @@
+---
+title: 'Assignment #4 - Dworkin'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+```{r}
+##2.1 General simulator for diploids
+#p(t+1) is the frequency of the A allele in the population in generation t+1
+
+#p(t) and q(t) are the allele frequencies of A and a in generation t
+
+#p2(t) is the genotypic frequency for the AA diploid genotype in generation t
+# WAA, WAa & Waa are the fitnesses for each genotype AA, Aa and aa respectively.
+
+pt1 <- function(wAA, wAa, waa, pt) { #pt_0)
+   wbar <- (pt^2*wAA) + (2*pt*(1-pt)*wAa) + ((1-pt)^2*waa) # mean pop fitness in a given generation (t)
+	 	  p_t1 <- (pt^2*(wAA/wbar)) + (pt-(1-pt)*(wAa/wbar))
+        return(p_t1)}
+
+#test code
+pt1(wAA = 0.9, wAa = 1.0, waa = 0.5, pt = 0.5)
+
+```
+
+```{r echo=TRUE}
+##2.2 Simlulating Many Generations
+#Test for 100 generations in the future
+diploid_selection <- function(p0 = 0.6, wAA = 1, wAa = 1.0, waa = 1.1, n = 100) {
+  
+  # Initialize vectors to store allele frequencies and mean pop fitness
+  p <- rep(NA, n)  # a vector to store allele frequencies
+  
+  wbar <- rep(NA, n)
+     
+    # starting conditions
+   	p[1] <- p0 # starting allele frequencies
+   	
+   	
+	  wbar[1] <- (p[1]^2*wAA) + (2*p[1]*(1-p[1])*wAa) + ((1-p[1])^2*waa)
+	
+	# now we need to loop from generation to generation
+	for ( i in 2:n) {
+	  	wbar[i - 1] <- (p[i - 1]^2*wAA) + (2*p[i - 1]*(1-p[i - 1])*wAa) + ((1-p[i - 1])^2*waa) # mean population fitness
+	  	p[i] <- (p[i-1]^2*(wAA/wbar[i - 1])) + (p[i - 1]*(1-p[i - 1])*(wAa/wbar[i - 1]))
+	  	
+    	}
+	  return(p)
+}
+
+# Plot
+p <- diploid_selection()
+generations <- 1:length(p)
+plot(p ~ generations, pch = 20, main = "A Allele frequency over Generations", 
+     ylab = "Allele frequency", 
+     xlab = "Generation")
+```
+
+```{r}
+# 3 - Drift simulation
+
+drift_sim <- function(p, diploid_pop, num_gen){
+ # Initialize vectors to store allele frequencies and mean pop fitness
+  A_freq <- rep(NA, num_gen)  # a vector to store allele frequencies
+  
+  a_freq <- rep(NA, num_gen)
+     
+    # starting conditions
+   	A_freq[1] <- p  # starting allele frequencies
+   	
+	  a_freq[1] <- 1-p
+	  
+	  for (i in 2:num_gen) {
+	    drift.sim.sample.data <- sample(c("A", "a"), size = 2*diploid_pop, rep = T, prob = c(A_freq[i - 1], a_freq[i - 1]))
+	        A_freq[i] <- mean(drift.sim.sample.data == "A")
+	        a_freq[i] <- mean(drift.sim.sample.data == "a")
+	     }
+	      return(A_freq)
+      }
+
+#Plot
+
+drift.sim.data <- drift_sim(0.2, 200, 100)
+generations = 1:length(drift.sim.data)
+plot(x = generations, y = drift.sim.data, main = "Drift Simulation over Generations",pch = 20, 
+  ylab = "A allele frequency", 
+   xlab = "Generation")
+
+
+
+```
+
+
+```{r}
+#4 - Loss of allele - proportion
+set.seed(100)
+drift_sim_many <- function(p, diploid_pop, num_gen){
+ # Initialize vectors to store allele frequencies and mean pop fitness
+  A_freq <- rep(NA, num_gen)  # a vector to store allele frequencies
+  
+  a_freq <- rep(NA, num_gen)
+     
+    # starting conditions
+   	A_freq[1] <- p  # starting allele frequencies
+   	
+	  a_freq[1] <- 1-p
+	  
+	  for (i in 2:num_gen) {
+	      drift.sim.many.data <- sample(c("A", "a"), size = 2*diploid_pop, rep = T, prob = c(A_freq[i - 1], a_freq[i - 1]))
+	      A_freq[i] <- mean(drift.sim.many.data == "A")
+	      a_freq[i] <- mean(drift.sim.many.data == "a")
+	   }
+	   return(A_freq[num_gen])
+  }  
+
+final.sim <- function(num.sim, p, diploid_pop, num_gen) {
+    sum(replicate(num.sim, drift_sim_many(p, diploid_pop, num_gen))/num.sim)
+  }
+
+#starting allele frequencies of p = f(A) of 0.5, 0.25 and 0.1, with 200 diploid individuals in the population each generation.
+final.sim(1000, 0.5, 200, 100)
+final.sim(1000, 0.25, 200, 100)
+final.sim(1000, 0.1, 200, 100)
+
+```
+
+
+
+```{r}
+##5 Plot the Allele Trajectories for Drift
+library(ggplot2)
+library(reshape)
+
+
+# Set up parameters
+N = 200 # number of diploid individuals
+N.allele = 2*N # number of alleles
+p = .5; q = 1-p
+N.gen = 100 # number of generations
+N.sim = 100 # number of simulations
+
+
+# Simulation
+A = array(0, dim=c(N.gen,N.sim)) #X = number of A1 alleles
+A[1,] = rep(N.allele*p,N.sim) # initialize number of A1 alleles in first generation
+for(j in 1:N.sim){
+  for(i in 2:N.gen){
+    A[i,j] = rbinom(1,N.allele,prob=A[i-1,j]/N.allele)
+    }  
+  }
+A = data.frame(A/N.allele)
+
+
+# Reshape data and plot simulations
+sim_data <- melt(A)
+ggplot(sim_data, aes(x = rep(c(1:N.gen), N.sim), y = value, colour = variable)) + 
+geom_line() + xlab("Generation") +  ylab("Allele Frequency") + ylim(0,1) + labs(title = "The Influence of Genetic drift on Allele Frequencies") + theme(legend.position = "none")
+```
+
+
+```{r}
+##6 
+#original
+set.seed(3)
+x <- seq(from =1, to = 10, length.out = 20) # length.out is how many observations we will have
+a <- 0.5 # intercept
+b <- 0.1 # slope
+y_deterministic <- a + b*x
+y_simulated <- rnorm(length(x), mean = y_deterministic, sd = 2)
+mod_sim <- lm(y_simulated ~ x)
+p_val_slope <- summary(mod_sim)$coef[2,4] # extracts the p-value
+p_val_slope
+
+```
+
+```{r}
+#re-write function
+set.seed(3)
+analysis <- function(a, b, obs, std) {
+     x <- seq(from = 1, to = 10, length.out = obs)
+     y_deterministic <- a + b*x
+     y_simulated <- rnorm(length(x), mean = y_deterministic, sd = std )
+  
+     mod_sim <- lm(y_simulated ~ x)
+    p_val_slope <- summary(mod_sim)$coef[2,4] # extracts the p-value
+    p_val_slope
+}
+
+#run 1000 times
+hist(replicate(1000, analysis(0.5, 0.1, 20, 2)))
+
+
+#proportion less than p = 0.05
+sample <- replicate(1000, analysis(0.5, 0.1, 20, 2))
+less_than <- sample < 0.05
+print(sum(less_than/1000)) #Proportion of times that the p-value was less than 0.05
+
+#change slope to 0
+hist(replicate(1000, analysis(0.5, 0.0, 20, 2)))
+
+sample <- replicate(1000, analysis(0.5, 0.0, 20, 2))
+less_than <- sample < 0.05
+print(sum(less_than/1000)) #Proportion of times that the p-value was less than 0.05
+
+#This result may be explained by the role that the slope plays in the function, as it determines what y_deterministic equals. By aking the slop 0, it makes the mean constant with the changing x. 
+
+
+#Finally, using either a for loop or an Rish method (i.e. one of the apply family of functions) try a grid of
+#sample sizes from 10 to 100 by 5 (i.e. 10, 15, 20. . . ., 95, 100) with the slope being fixed at 0.1, intercept
+#= 0.5 and residual standard error as 1.5. At each different sample size, run the simulation 100 times
+#and report the frequency at which the p value is less than 0.05. What pattern do you observe. Plotting
+#the proportion of p-values less than 0.05 on the Y axis VS sample size (X axis) may be very helpful
+
+#analysis <- function(a, b, obs, std) {
+ # obs <- rep(NA, obs)
+  
+  #starting conditions
+#  obs[1] <- obs
+  
+  
+#}
+
+#for (i = 0; i <= 100; i += 5)
+
+ #:( 
+```
+
